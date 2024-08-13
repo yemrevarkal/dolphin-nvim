@@ -6,6 +6,8 @@ vim.keymap.set("n", "<leader>pv", vim.cmd.Ex)
 
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
+
+
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
@@ -72,36 +74,8 @@ vim.keymap.set("n", "<leader><leader>", function()
     vim.cmd("so")
 end)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- Smart Enter
+vim.keymap.set("i", "<leader><CR>", "<CR><ESC>O", {noremap = true, desc = "Smart Enter"})
 
 
 
