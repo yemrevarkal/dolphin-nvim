@@ -29,6 +29,7 @@ return {
                 "lua_ls",
                 "rust_analyzer",
                 "pyright",
+		"tsserver"
             },
             handlers = {
                 function(server_name) -- default handler (optional)
@@ -67,6 +68,19 @@ return {
                         }
                     }
                 end,
+		["rust_analyzer"] = function ()
+			local lspconfig = require("lspconfig")
+			lspconfig.rust_analyzer.setup {
+                        capabilities = capabilities,
+			root_dir = lspconfig.util.root_pattern("Cargo.toml"),
+			filetypes = { "rust" },
+			settings = {
+                            cargo = {
+				allFeatures = true,
+				}
+                            }
+                        }
+		end,
 		["pyright"] = function ()
 			local lspconfig = require("lspconfig")
 			lspconfig.pyright.setup {
