@@ -1,5 +1,5 @@
 function ColorMyPencils(color)
-	color = color or "rose-pine-moon"
+	color = color or "kanagawa-wave"
 	vim.cmd.colorscheme(color)
 	vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
 	vim.api.nvim_set_hl(0, "NormalFloat", { bg = "none" })
@@ -84,5 +84,40 @@ return {
         end
     },
 
+    {
+        "catppuccin/nvim",
+        name = "catppuccin",
+        config = function()
+            require("catppuccin").setup({
+                transparent_background = true,
+                no_italic = true,
+            })
+        end
+    },
+
+    {
+        "rebelot/kanagawa.nvim",
+        config = function()
+            require("kanagawa").setup({
+                transparent = true,
+                commentStyle = { italic = true },
+                keywordStyle = { italic = false },
+                overrides = function(colors)
+                    local theme = colors.theme
+                    return {
+                        -- boost foreground contrast
+                        String = { fg = colors.palette.springGreen, bold = true },
+                        Keyword = { fg = colors.palette.oniViolet, bold = true },
+                        Function = { fg = colors.palette.crystalBlue, bold = true },
+                        -- brighter comments
+                        Comment = { fg = colors.palette.fujiGray },
+                        -- sharper UI elements
+                        LineNr = { fg = colors.palette.sumiInk6 },
+                        CursorLineNr = { fg = colors.palette.roninYellow, bold = true },
+                    }
+                end,
+            })
+        end
+    },
 
 }

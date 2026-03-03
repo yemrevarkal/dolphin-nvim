@@ -1,5 +1,5 @@
 vim.g.mapleader = " "
-vim.keymap.set("n", "<leader>pv", vim.cmd.Ex)
+-- vim.keymap.set("n", "<leader>pv", vim.cmd.Ex)
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -37,12 +37,12 @@ vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower win
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
 
--- auto closing of charachters 
-vim.api.nvim_set_keymap('i', '(', '()<ESC>i', { noremap = true ,  desc = 'autoclosing ()' })
-vim.api.nvim_set_keymap('i', '{', '{}<ESC>i', { noremap = true ,  desc = 'autoclosing {}' })
-vim.api.nvim_set_keymap('i', '[', '[]<ESC>i', { noremap = true ,  desc = 'autoclosing []' })
-vim.api.nvim_set_keymap('i', "'", "''<ESC>i", { noremap = true ,  desc = "autoclosing ''" })
-vim.api.nvim_set_keymap('i', '"', '""<ESC>i', { noremap = true ,  desc = 'autoclosing ""' })
+-- auto closing of charachters (replaced by nvim-autopairs)
+-- vim.api.nvim_set_keymap('i', '(', '()<ESC>i', { noremap = true ,  desc = 'autoclosing ()' })
+-- vim.api.nvim_set_keymap('i', '{', '{}<ESC>i', { noremap = true ,  desc = 'autoclosing {}' })
+-- vim.api.nvim_set_keymap('i', '[', '[]<ESC>i', { noremap = true ,  desc = 'autoclosing []' })
+-- vim.api.nvim_set_keymap('i', "'", "''<ESC>i", { noremap = true ,  desc = "autoclosing ''" })
+-- vim.api.nvim_set_keymap('i', '"', '""<ESC>i', { noremap = true ,  desc = 'autoclosing ""' })
 
 
 -- highlight move
@@ -76,6 +76,9 @@ end)
 
 -- Smart Enter
 vim.keymap.set("i", "<leader><CR>", "<CR><ESC>O", {noremap = true, desc = "Smart Enter"})
+
+-- errror
+vim.keymap.set("n", "<leader>e", vim.diagnostic.open_float)
 
 
 
