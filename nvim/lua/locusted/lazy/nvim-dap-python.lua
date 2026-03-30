@@ -8,6 +8,6 @@ return {
   },
   config = function ()
     -- Update the path passed to setup to point to your system or virtual env python binary
-    require('dap-python').setup('/usr/bin/python3')
+    require('dap-python').setup(vim.g.python3_host_prog)
   end
 }
