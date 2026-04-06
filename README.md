@@ -6,6 +6,7 @@ Personal Neovim + Tmux + Alacritty configuration.
 
 - [ripgrep](https://github.com/BurntSushi/ripgrep#installation) — required by Telescope for live grep
 - [Node.js](https://nodejs.org/) — required by Mason for some LSP server installations
+- [tree-sitter-cli](https://github.com/tree-sitter/tree-sitter/blob/master/cli/README.md) — required by nvim-treesitter to compile parsers (`npm install -g tree-sitter-cli`)
 - [Alacritty](https://alacritty.org/) (0.16+) — GPU-accelerated terminal emulator
 - [JetBrainsMono Nerd Font](https://www.nerdfonts.com/font-downloads) — for icons in statusline and file explorer
 - [GNU Stow](https://www.gnu.org/software/stow/) — for symlinking configs
@@ -34,4 +35,16 @@ stow -t ~/.config/tmux tmux
 stow -t ~/.config/alacritty alacritty
 ```
 
+### Install tree-sitter-cli
+
+```bash
+npm install -g tree-sitter-cli
+```
+
 Open Neovim and Lazy will automatically install all plugins on first launch.
+
+### Install treesitter parsers
+
+```vim
+:TSInstall python rust lua javascript typescript c bash markdown markdown_inline vimdoc
+```
