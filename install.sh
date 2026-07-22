@@ -97,6 +97,17 @@ ensure_path_in_bashrc() {
     note "Added ~/.local/bin to PATH in ~/.bashrc — open a new shell or 'source ~/.bashrc'."
 }
 
+# Install rustup/cargo if not present, and put cargo on PATH for this run.
+ensure_rust() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    fi
+    # shellcheck disable=SC1091
+    [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+    export PATH="$HOME/.cargo/bin:$PATH"
+    command -v cargo >/dev/null 2>&1
+}
+
 # ---------------------------------------------------------------------------
 step "Detected environment"
 # ---------------------------------------------------------------------------
@@ -123,7 +134,7 @@ if command -v fdfind >/dev/null 2>&1 && ! command -v fd >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-step "Installing Node.js (NodeSource LTS) + tree-sitter-cli"
+step "Installing Node.js (NodeSource LTS)"
 # ---------------------------------------------------------------------------
 if ! command -v node >/dev/null 2>&1; then
     curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
@@ -132,14 +143,35 @@ if ! command -v node >/dev/null 2>&1; then
 else
     ok "node already present: $(node --version)"
 fi
-
 # Global npm installs into ~/.local (no sudo).
 npm config set prefix "$HOME/.local" >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------------------
+step "Installing tree-sitter CLI (needed by nvim-treesitter to compile parsers)"
+# ---------------------------------------------------------------------------
+# nvim-treesitter (main branch) runs `tree-sitter build` to compile parsers.
+# The npm package ships a PREBUILT binary linked against a recent glibc (2.39 /
+# Ubuntu 24.04); on older Ubuntu it fails at runtime with
+#   "libc.so.6: version `GLIBC_2.39' not found".
+# So: install via npm, then actually RUN it — if it can't execute, build the CLI
+# from source with cargo (links against the local glibc, works on any Ubuntu).
+ts_works() { tree-sitter --version >/dev/null 2>&1; }
+
 if ! command -v tree-sitter >/dev/null 2>&1; then
-    npm install -g tree-sitter-cli
-    ok "tree-sitter-cli installed"
+    npm install -g tree-sitter-cli || true
+    hash -r 2>/dev/null || true
+fi
+
+if ts_works; then
+    ok "tree-sitter CLI works: $(tree-sitter --version)"
 else
-    ok "tree-sitter-cli already present"
+    warn "prebuilt tree-sitter CLI can't run here (glibc mismatch) — building from source with cargo"
+    npm uninstall -g tree-sitter-cli >/dev/null 2>&1 || true
+    ensure_rust || die "cargo needed to build tree-sitter CLI but rustup install failed"
+    cargo install tree-sitter-cli
+    hash -r 2>/dev/null || true
+    ts_works && ok "tree-sitter CLI built: $(tree-sitter --version)" \
+             || die "tree-sitter CLI still not runnable after cargo build"
 fi
 
 # ---------------------------------------------------------------------------
@@ -263,12 +295,7 @@ fi
 step "Optional: Rust toolchain + jupynvim remote core"
 # ---------------------------------------------------------------------------
 if [ "$WITH_RUST" -eq 1 ]; then
-    if ! command -v rustup >/dev/null 2>&1; then
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        ok "rustup installed"
-    fi
-    # shellcheck disable=SC1091
-    [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+    ensure_rust || die "failed to install rustup/cargo"
     rustup target add x86_64-unknown-linux-musl
     ok "musl target added"
     note "jupynvim-core will be built after plugin bootstrap (needs the plugin cloned first)."

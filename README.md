@@ -51,17 +51,29 @@ NVIM_VERSION=v0.12.0 ./install.sh   # or "nightly"
 ## Treesitter parsers (important)
 
 `nvim-treesitter` is pinned to its **`main`** branch, whose in-config auto-install
-is unreliable — so parsers are compiled explicitly with the **`tree-sitter` CLI**
-(installed by `install.sh` via `npm install -g tree-sitter-cli`). The installer
-runs this for you, but if syntax colors are missing, install them manually inside
-Neovim:
+is unreliable — so parsers are compiled explicitly with the **`tree-sitter` CLI**,
+which `install.sh` then drives via a headless `:TSInstall …`.
+
+⚠️ **glibc gotcha:** the npm `tree-sitter-cli` ships a prebuilt binary linked
+against a recent glibc (2.39 / Ubuntu 24.04). On **older Ubuntu** it fails at
+runtime with `libc.so.6: version 'GLIBC_2.39' not found`, and parser compiles die
+with `Error during "tree-sitter build"`. `install.sh` handles this: it installs the
+npm CLI, tests that it actually runs, and if not, **builds the CLI from source with
+`cargo install tree-sitter-cli`** (links against the local glibc — works on any
+Ubuntu).
+
+If syntax colors are still missing, verify and install manually:
+
+```bash
+tree-sitter --version    # must print a version, NOT a GLIBC error
+# if it errors: cargo install tree-sitter-cli   (installs to ~/.cargo/bin)
+```
 
 ```vim
 :TSInstall python rust lua javascript typescript c bash markdown markdown_inline vimdoc
 ```
 
-If `:TSInstall` fails, check `tree-sitter --version` resolves (the CLI must be on
-`PATH`) and that a C compiler is present (`build-essential`).
+Also ensure a C compiler is present (`build-essential`).
 
 ## Notes
 
