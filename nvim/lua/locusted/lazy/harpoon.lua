@@ -92,12 +92,18 @@ return {
 			end
 		end
 
+		local function current_index(list)
+			local item = list.config.create_list_item(list.config)
+			local _, idx = list:get_by_value(item.value)
+			return idx
+		end
+
 		local function cycle_group(group)
 			if #group == 0 then
 				return
 			end
 			local list = harpoon:list()
-			local idx = list:get_current_index()
+			local idx = current_index(list)
 			local pos = nil
 			if idx then
 				for i, v in ipairs(group) do
@@ -112,7 +118,7 @@ return {
 		end
 
 		vim.keymap.set("n", "<leader>ha", function()
-			harpoon:list():append()
+			harpoon:list():add()
 		end)
 		vim.keymap.set("n", "<leader>hc", function()
 			harpoon:list():clear()
@@ -188,7 +194,7 @@ return {
 			if len == 0 then
 				return
 			end
-			local idx = list:get_current_index()
+			local idx = current_index(list)
 			local next_idx = idx and (idx % len) + 1 or 1
 			list:select(next_idx)
 		end)
@@ -198,7 +204,7 @@ return {
 			if len == 0 then
 				return
 			end
-			local idx = list:get_current_index()
+			local idx = current_index(list)
 			local prev_idx = idx and ((idx - 2) % len) + 1 or len
 			list:select(prev_idx)
 		end)

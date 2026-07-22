@@ -11,35 +11,70 @@ return {
 		jup.setup({
 			log_level = "info",
 			image_renderer = "placeholder", -- "placeholder", "kitty", or "chafa"
+			-- Don't let jupynvim hijack <leader>e (it binds explorer keys on
+			-- VeryLazy + a timer so they land last). Keep the explorer on
+			-- <leader>E only; <leader>e stays free for vim.diagnostic.open_float.
+			explorer_keys = { "<leader>E" },
 		})
 
-		-- Auto-enable matplotlib inline plots for ALL python kernels.
+		-- Auto-enable matplotlib inline plots for ALL python kernels — and make
+		-- bare `df.plot()` / `plt.plot()` actually auto-display.
 		--
-		-- jupynvim already injects `%matplotlib inline` on kernel start, but only
-		-- when it detects a python kernel: the kernel NAME contains "python" OR
-		-- notebook_meta.language == "python" (init.lua:2288). Conda-env kernels
-		-- with a custom name (e.g. "mmm_v2") and an empty/non-"python" language
-		-- string slip through that check, so `df.plot()` / a bare `ax` never
-		-- auto-displays a figure — only an explicit `%matplotlib inline` works.
-		-- (Restart also never injects: M.restart_kernel bypasses start_kernel.)
+		-- Two distinct problems, both fixed here:
+		--   1) jupynvim only injects `%matplotlib inline` when it detects a python
+		--      kernel (kernel NAME contains "python" OR notebook_meta.language ==
+		--      "python", init.lua:2358-2359). Conda-env kernels with a custom name
+		--      (e.g. "mmm_v2") and an empty/non-"python" language slip that check,
+		--      so the magic is never sent. (Restart also never injects:
+		--      M.restart_kernel bypasses start_kernel.)
+		--   2) Even WITH the magic active, `%matplotlib inline` in these envs does
+		--      NOT register matplotlib_inline's `flush_figures` on IPython's
+		--      `post_execute` event — confirmed via diagnostics: only
+		--      `_draw_all_if_interactive` was registered. `flush_figures` is the
+		--      hook that auto-displays figures created during a cell. Without it,
+		--      bare `plt.plot()` / `df.plot()` show only the text repr
+		--      (`[<Line2D>]` / `<Axes: >`); only an explicit trailing `fig` (its
+		--      `_repr_png_`) or `plt.show()` produces an image. (Affects python3
+		--      kernels too — same missing hook.)
 		--
-		-- Fix: after start/restart, send the same magic ourselves, unconditionally
-		-- for python notebooks, retrying until the (re)started kernel accepts it.
-		-- The code is try/except-wrapped and idempotent, so the redundant inject
-		-- on python-named kernels is harmless.
+		-- Fix: after start/restart, for python notebooks, (a) send the magic
+		-- ourselves, and (b) explicitly register `flush_figures` on post_execute —
+		-- post_execute DOES fire under jupynvim (verified), so the hook works.
+		-- Idempotent + try/except-wrapped, retried until the kernel accepts it.
 		local Notebook = require("jupynvim.notebook")
-		local INLINE_CODE =
-			"try:\n    get_ipython().run_line_magic('matplotlib', 'inline')\nexcept Exception:\n    pass\n"
+		local INLINE_CODE = table.concat({
+			"try:",
+			"    get_ipython().run_line_magic('matplotlib', 'inline')",
+			"    try:",
+			"        from matplotlib_inline.backend_inline import flush_figures",
+			"    except Exception:",
+			"        from IPython.core.pylabtools import flush_figures",
+			"    _ip = get_ipython()",
+			"    _cbs = _ip.events.callbacks.get('post_execute', [])",
+			"    if not any(getattr(f, '__name__', '') == 'flush_figures' for f in _cbs):",
+			"        _ip.events.register('post_execute', flush_figures)",
+			"except Exception:",
+			"    pass",
+		}, "\n") .. "\n"
 
 		local function inject_inline(nb, attempt)
 			attempt = attempt or 1
 			if attempt > 60 or nb.kernel_error then
+				require("jupynvim.log").info(
+					("[inline] bail attempt=%d kernel_error=%s"):format(attempt, tostring(nb.kernel_error))
+				)
 				return
 			end -- ~30s cap, bail on start failure
 			-- Skip genuinely non-python kernels; empty/missing language (the case
 			-- that slips jupynvim's check) is treated as python and proceeds.
 			local lang = ((nb.notebook_meta and nb.notebook_meta.language) or ""):lower()
+			if attempt == 1 then
+				require("jupynvim.log").info(
+					("[inline] start lang=%q session=%s"):format(lang, tostring(nb.session_id))
+				)
+			end
 			if lang ~= "" and not lang:find("python") then
+				require("jupynvim.log").info(("[inline] SKIP: non-python lang=%q"):format(lang))
 				return
 			end
 			local cl = nb.alias and jup.client_for(nb.alias) or jup.client
@@ -52,9 +87,12 @@ return {
 			cl:call("execute_silent", { session_id = nb.session_id, code = INLINE_CODE }, function(err)
 				-- err while the kernel is still (re)starting -> retry shortly.
 				if err then
+					require("jupynvim.log").info(("[inline] execute_silent err=%s -> retry"):format(tostring(err)))
 					vim.defer_fn(function()
 						inject_inline(nb, attempt + 1)
 					end, 500)
+				else
+					require("jupynvim.log").info(("[inline] injected ok attempt=%d"):format(attempt))
 				end
 			end)
 		end
@@ -73,6 +111,42 @@ return {
 		end
 		wrap("start_kernel")
 		wrap("restart_kernel")
+
+		-- Queued-cell indicator (pairs with the render.lua border_hl patch — see
+		-- docs/jupnvim_debug.md). When you fire cells with <S-CR> while a heavy
+		-- cell is still running, the just-submitted cells sit in the kernel queue.
+		-- jupynvim only flips a cell to "busy" on the kernel's execute_input event
+		-- (notebook.lua:300), so queued cells are otherwise indistinguishable from
+		-- idle. We set st.queued at submit time → render paints the frame blue
+		-- (running=red via HL_BUSY, queued=blue via JupynvimQueued, idle=gray).
+		-- execute_input then REPLACES cell_state with {exec_state="busy",...}, which
+		-- drops the flag, so blue flips to red exactly when that cell starts.
+		local function mark_queued(buf)
+			buf = buf or vim.api.nvim_get_current_buf()
+			local nb = Notebook.get(buf)
+			if not nb then
+				return
+			end
+			local lnum = vim.api.nvim_win_get_cursor(0)[1]
+			local cell_id = nb:cell_at_line(lnum)
+			local cell = cell_id and nb:get_cell(cell_id)
+			if not (cell and cell.cell_type == "code") then
+				return
+			end
+			local st = nb.cell_state[cell_id] or {}
+			if st.exec_state ~= "busy" then
+				st.queued = true
+				nb.cell_state[cell_id] = st
+				vim.schedule(function()
+					require("jupynvim.render").refresh(nb, vim.fn.bufwinid(buf))
+				end)
+			end
+		end
+		local orig_run_cell = jup.run_cell
+		jup.run_cell = function(buf, opts)
+			mark_queued(buf)
+			return orig_run_cell(buf, opts)
+		end
 
 		-- Keep Copilot working inside notebook cells without crashing.
 		--
@@ -121,8 +195,9 @@ return {
 		-- SAME session_id, snap). The kernel, keyed by session_id in the core,
 		-- lives on. Hooked in two places:
 		--   1) wrap M.open so `:e!` reconciles instead of close+open, and
-		--   2) FileChangedShell so a clean buffer auto-reloads with no `:e!`
-		--      (a dirty buffer is warned about and never clobbered).
+		--   2) an mtime poll (focus/idle/enter) so an external edit to a clean
+		--      buffer auto-reloads with no `:e!` (a dirty buffer is warned about
+		--      and never clobbered).
 		local Render = require("jupynvim.render")
 
 		-- "Unsaved edits" we must not clobber == unsaved CELL SOURCE the user typed
@@ -233,18 +308,6 @@ return {
 				saved_src_sig[new_nb.buf] = source_sig(new_nb)
 			end
 			return true
-		end
-
-		-- Unsaved in-editor SOURCE edits exist iff the current cell-source
-		-- signature differs from the baseline captured at the last open/save/
-		-- reconcile. (vim.bo.modified is useless here — jupynvim keeps it
-		-- perpetually true so `:w` routes through its BufWriteCmd.)
-		local function has_unsaved_edits(nb, buf)
-			local base = saved_src_sig[buf]
-			if not base or not vim.api.nvim_buf_is_valid(buf) then
-				return false -- no baseline yet -> treat as clean
-			end
-			return source_sig(nb) ~= base
 		end
 
 		local orig_open = jup.open
@@ -459,53 +522,6 @@ return {
 			callback = function(args)
 				disk_mtime[args.buf] = nil
 				warned[args.buf] = nil
-			end,
-		})
-
-		vim.api.nvim_create_autocmd("FileChangedShell", {
-			pattern = "*.ipynb",
-			group = vim.api.nvim_create_augroup("JupynvimKernelSafeReload", { clear = true }),
-			callback = function(args)
-				log.info(
-					("[reload] FileChangedShell fired file=%s buf=%d reason=%s"):format(
-						tostring(args.file),
-						args.buf or -1,
-						tostring(vim.v.fcs_reason)
-					)
-				)
-				if type(args.file) == "string" and args.file:match("^%w+://") then
-					return
-				end
-				local nb = Notebook.get(args.buf)
-				if not nb then
-					return
-				end -- not a live notebook; let Neovim handle
-
-				-- Suppress the built-in (kernel-killing) reload.
-				vim.bo[args.buf].autoread = false
-				vim.v.fcs_choice = ""
-
-				if has_unsaved_edits(nb, args.buf) then
-					log.info("[reload] skipped: buffer has unsaved edits (source mismatch)")
-					vim.schedule(function()
-						vim.notify(
-							(
-								"[jupynvim] %s changed on disk but the buffer has unsaved edits — not reloaded.\n"
-								.. ":w to keep your version, or :e! to load from disk (the kernel survives now)."
-							):format(vim.fn.fnamemodify(args.file, ":t")),
-							vim.log.levels.WARN
-						)
-					end)
-					return
-				end
-
-				-- Clean buffer: reconcile from disk, keeping the kernel.
-				vim.schedule(function()
-					if vim.api.nvim_buf_is_valid(args.buf) and Notebook.get(args.buf) then
-						local ok, did = pcall(reconcile_from_disk, nb)
-						log.info(("[reload] reconcile ok=%s result=%s"):format(tostring(ok), tostring(did)))
-					end
-				end)
 			end,
 		})
 	end,

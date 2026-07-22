@@ -74,6 +74,11 @@ vim.keymap.set("n", "<leader><leader>", function()
     vim.cmd("so")
 end)
 
+-- Execute the current line as Lua
+vim.keymap.set("n", "<leader>x", ":.lua<CR>", { desc = "Execute current line as Lua" })
+-- Execute the visual selection as Lua
+vim.keymap.set("v", "<leader>x", ":lua<CR>", { desc = "Execute selection as Lua" })
+
 -- Smart Enter
 vim.keymap.set("i", "<leader><CR>", "<CR><ESC>O", {noremap = true, desc = "Smart Enter"})
 

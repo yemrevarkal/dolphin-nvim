@@ -1,3 +1,12 @@
+# Send a distinct code for Shift+Enter (and Ctrl+Enter) so Neovim can tell them
+# apart from plain Enter — needed for notebook "run cell" via <S-CR>/<C-CR>.
+[keyboard]
+bindings = [
+  { key = "Return", mods = "Shift",   chars = "\u001b[13;2u" },
+  { key = "Return", mods = "Control", chars = "\u001b[13;5u" },
+  { key = "M", mods = "Control", chars = "\u001b\u001b" },
+]
+
 [font]
 size = 13.0
 
