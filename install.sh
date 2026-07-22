@@ -167,6 +167,8 @@ if ts_works; then
 else
     warn "prebuilt tree-sitter CLI can't run here (glibc mismatch) — building from source with cargo"
     npm uninstall -g tree-sitter-cli >/dev/null 2>&1 || true
+    # tree-sitter-cli pulls in bindgen, which needs libclang to build.
+    sudo apt-get install -y libclang-dev
     ensure_rust || die "cargo needed to build tree-sitter CLI but rustup install failed"
     cargo install tree-sitter-cli
     hash -r 2>/dev/null || true

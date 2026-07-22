@@ -66,7 +66,9 @@ If syntax colors are still missing, verify and install manually:
 
 ```bash
 tree-sitter --version    # must print a version, NOT a GLIBC error
-# if it errors: cargo install tree-sitter-cli   (installs to ~/.cargo/bin)
+# if it errors, build from source (bindgen needs libclang):
+#   sudo apt-get install -y libclang-dev
+#   cargo install tree-sitter-cli          # installs to ~/.cargo/bin
 ```
 
 ```vim
