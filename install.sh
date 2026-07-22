@@ -285,20 +285,21 @@ else
     info "installing plugins (lazy.nvim) ..."
     "$LOCAL_BIN/nvim" --headless "+Lazy! sync" +qa 2>&1 | tail -n 3 || warn "Lazy sync reported issues"
 
-    # Treesitter parsers. nvim-treesitter is pinned to the `main` branch, whose
-    # in-config auto_install is unreliable — so, exactly as the README documents,
-    # we compile the parsers explicitly with the tree-sitter CLI. On `main` the
-    # programmatic installer returns a handle we can block on with :wait().
+    # Treesitter parsers. nvim-treesitter is pinned to the `main` branch (its
+    # in-config auto_install is unreliable), so we run the documented :TSInstall
+    # command in a headless nvim. :TSInstall is async, so we vim.wait() — which
+    # pumps the event loop — until every requested parser shows up as installed.
     if ! command -v tree-sitter >/dev/null 2>&1; then
         warn "tree-sitter CLI not on PATH — parsers can't compile; run 'npm install -g tree-sitter-cli'"
     fi
-    info "compiling treesitter parsers (tree-sitter CLI) ..."
+    info "installing treesitter parsers (headless :TSInstall) ..."
     TS_LUA_LIST="$(printf "'%s'," $TS_PARSERS)"   # -> 'vimdoc','javascript',...
-    timeout 1200 "$LOCAL_BIN/nvim" --headless \
-        -c "lua require('nvim-treesitter').install({${TS_LUA_LIST}}):wait(1200000)" \
-        -c "qa" >/dev/null 2>&1 \
-        && ok "treesitter parsers compiled" \
-        || warn "parser compile timed out/partial — run ':TSInstall $TS_PARSERS' in nvim"
+    timeout 1800 "$LOCAL_BIN/nvim" --headless \
+        -c "TSInstall $TS_PARSERS" \
+        -c "lua vim.wait(1700000, function() local got = require('nvim-treesitter').get_installed(); for _, l in ipairs({${TS_LUA_LIST}}) do if not vim.tbl_contains(got, l) then return false end end; return true end, 1000)" \
+        -c "qa" \
+        && ok "treesitter parsers installed" \
+        || warn "parser install timed out/partial — run ':TSInstall $TS_PARSERS' in nvim"
 
     info "installing LSP servers / tools (Mason) ..."
     timeout 900 "$LOCAL_BIN/nvim" --headless \
