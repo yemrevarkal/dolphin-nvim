@@ -285,10 +285,20 @@ else
     info "installing plugins (lazy.nvim) ..."
     "$LOCAL_BIN/nvim" --headless "+Lazy! sync" +qa 2>&1 | tail -n 3 || warn "Lazy sync reported issues"
 
-    info "installing treesitter parsers ..."
-    timeout 900 "$LOCAL_BIN/nvim" --headless "+TSUpdateSync" \
-        "+TSInstallSync! $TS_PARSERS" +qa >/dev/null 2>&1 || \
-        warn "treesitter install timed out/partial — it will finish on first nvim launch"
+    # Treesitter parsers. nvim-treesitter is pinned to the `main` branch, whose
+    # in-config auto_install is unreliable — so, exactly as the README documents,
+    # we compile the parsers explicitly with the tree-sitter CLI. On `main` the
+    # programmatic installer returns a handle we can block on with :wait().
+    if ! command -v tree-sitter >/dev/null 2>&1; then
+        warn "tree-sitter CLI not on PATH — parsers can't compile; run 'npm install -g tree-sitter-cli'"
+    fi
+    info "compiling treesitter parsers (tree-sitter CLI) ..."
+    TS_LUA_LIST="$(printf "'%s'," $TS_PARSERS)"   # -> 'vimdoc','javascript',...
+    timeout 1200 "$LOCAL_BIN/nvim" --headless \
+        -c "lua require('nvim-treesitter').install({${TS_LUA_LIST}}):wait(1200000)" \
+        -c "qa" >/dev/null 2>&1 \
+        && ok "treesitter parsers compiled" \
+        || warn "parser compile timed out/partial — run ':TSInstall $TS_PARSERS' in nvim"
 
     info "installing LSP servers / tools (Mason) ..."
     timeout 900 "$LOCAL_BIN/nvim" --headless \

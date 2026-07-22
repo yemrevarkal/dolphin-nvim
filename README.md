@@ -48,6 +48,21 @@ NVIM_VERSION=v0.12.0 ./install.sh   # or "nightly"
 - **Symlinks** via GNU Stow: `nvim` `tmux` `alacritty` `kitty` → `~/.config/*`
 - **TPM** → `~/.tmux/plugins/tpm`, plus first-run plugin install
 
+## Treesitter parsers (important)
+
+`nvim-treesitter` is pinned to its **`main`** branch, whose in-config auto-install
+is unreliable — so parsers are compiled explicitly with the **`tree-sitter` CLI**
+(installed by `install.sh` via `npm install -g tree-sitter-cli`). The installer
+runs this for you, but if syntax colors are missing, install them manually inside
+Neovim:
+
+```vim
+:TSInstall python rust lua javascript typescript c bash markdown markdown_inline vimdoc
+```
+
+If `:TSInstall` fails, check `tree-sitter --version` resolves (the CLI must be on
+`PATH`) and that a C compiler is present (`build-essential`).
+
 ## Notes
 
 - **Config portability:** the Neovim Python host is resolved at runtime from
