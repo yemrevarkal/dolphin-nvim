@@ -136,15 +136,31 @@ fi
 # ---------------------------------------------------------------------------
 step "Installing Node.js (NodeSource LTS)"
 # ---------------------------------------------------------------------------
-if ! command -v node >/dev/null 2>&1; then
+# Check the MAJOR version, not just presence: pyright/copilot need node >= 18, and
+# an old apt/conda node left in place would break them with "Unexpected token '?'".
+node_major() { node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
+NODE_MAJOR=0
+command -v node >/dev/null 2>&1 && NODE_MAJOR="$(node_major)"
+if [ "${NODE_MAJOR:-0}" -lt 18 ]; then
+    info "node missing or too old (major=${NODE_MAJOR}); installing NodeSource LTS"
     curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
     sudo apt-get install -y nodejs
+    hash -r 2>/dev/null || true
     ok "node installed: $(node --version)"
 else
     ok "node already present: $(node --version)"
 fi
 # Global npm installs into ~/.local (no sudo).
 npm config set prefix "$HOME/.local" >/dev/null 2>&1 || true
+
+# A conda/venv node earlier on PATH can still SHADOW the one we just installed —
+# and that's what launches pyright. Warn loudly if the *active* node is too old.
+if command -v node >/dev/null 2>&1 && [ "$(node_major)" -lt 18 ]; then
+    warn "active 'node' is v$(node_major) at $(command -v node) — too old for pyright/copilot"
+    warn "it's likely a conda/venv node shadowing the system one. Upgrade it, e.g.:"
+    warn "  conda install -n base -c conda-forge 'nodejs>=20'   (if it's conda's node)"
+    note "pyright fails with \"Unexpected token '?'\" until 'node' resolves to >= 18."
+fi
 
 # ---------------------------------------------------------------------------
 step "Installing tree-sitter CLI (needed by nvim-treesitter to compile parsers)"
