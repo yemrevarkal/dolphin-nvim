@@ -337,7 +337,29 @@ else
         warn "Mason install timed out/partial — it will finish on first nvim launch"
     ok "Neovim bootstrap complete"
 
-    # jupynvim remote core (only after the plugin has been cloned by Lazy).
+    # jupynvim LOCAL core — needed to open/run notebooks on THIS machine (nvim
+    # running here, `:JupynvimOpen`, no SSH). The Lazy build hook downloads a
+    # prebuilt jupynvim-core, but — exactly like tree-sitter — that prebuilt is
+    # linked against a recent glibc and WON'T run on older Ubuntu, so the backend
+    # dies on spawn and `:JupynvimOpen` reports "backend not running". Test it and
+    # rebuild natively from source (cargo, local glibc) if it can't execute.
+    JUP_DIR="$HOME/.local/share/nvim/lazy/jupynvim"
+    JUP_LOCAL_CORE="$JUP_DIR/core/target/release/jupynvim-core"
+    if [ -d "$JUP_DIR/core" ]; then
+        if [ -x "$JUP_LOCAL_CORE" ] && "$JUP_LOCAL_CORE" --version >/dev/null 2>&1; then
+            ok "jupynvim local core works: $("$JUP_LOCAL_CORE" --version 2>/dev/null | head -1)"
+        else
+            warn "jupynvim local core missing/unrunnable here (glibc mismatch) — building from source"
+            # common build deps for the core's Rust crates (harmless if unused)
+            sudo apt-get install -y pkg-config libssl-dev
+            ensure_rust || die "cargo needed to build jupynvim-core but rustup install failed"
+            ( cd "$JUP_DIR/core" && cargo build --release ) \
+                && ok "jupynvim local core built: $("$JUP_LOCAL_CORE" --version 2>/dev/null | head -1)" \
+                || warn "jupynvim-core build failed — check the error for a missing system lib and re-run"
+        fi
+    fi
+
+    # jupynvim remote core (musl, for uploading to SSH remotes via :JupynvimConnect).
     if [ "$WITH_RUST" -eq 1 ]; then
         JUP_CORE="$HOME/.local/share/nvim/lazy/jupynvim/core"
         if [ -d "$JUP_CORE" ]; then
