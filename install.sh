@@ -143,6 +143,10 @@ NODE_MAJOR=0
 command -v node >/dev/null 2>&1 && NODE_MAJOR="$(node_major)"
 if [ "${NODE_MAJOR:-0}" -lt 18 ]; then
     info "node missing or too old (major=${NODE_MAJOR}); installing NodeSource LTS"
+    # The distro nodejs/libnode-dev (e.g. Ubuntu 22.04's node 12) owns headers like
+    # /usr/include/node/common.gypi and blocks the NodeSource package from unpacking
+    # with a dpkg file-conflict — remove the distro packages first.
+    sudo apt-get remove -y nodejs npm libnode-dev nodejs-doc >/dev/null 2>&1 || true
     curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
     sudo apt-get install -y nodejs
     hash -r 2>/dev/null || true
