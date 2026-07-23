@@ -15,14 +15,23 @@ vim.opt.mouse = 'a'
 -- Don't show the mode, since it's already in the status line
 vim.opt.showmode = false
 
--- Sync clipboard between OS and Neovim.
---  Schedule the setting after `UiEnter` because it can increase startup-time.
---  Remove this option if you want your OS clipboard to remain independent.
-
---  See `:help 'clipboard'`
---vim.schedule(function()
---    vim.opt.clipboard = 'unnamedplus'
---end)
+-- Clipboard: over SSH use the built-in OSC 52 provider so yanks reach the
+-- LOCAL terminal's clipboard; locally fall back to native (xclip/wl-copy),
+-- which also supports paste (OSC 52 paste is blocked by most terminals).
+if vim.env.SSH_TTY or vim.env.SSH_CONNECTION then
+    local osc52 = require("vim.ui.clipboard.osc52")
+    vim.g.clipboard = {
+        name = "OSC 52",
+        copy = {
+            ["+"] = osc52.copy("+"),
+            ["*"] = osc52.copy("*"),
+        },
+        paste = {
+            ["+"] = osc52.paste("+"),
+            ["*"] = osc52.paste("*"),
+        },
+    }
+end
 
 -- Enable break indent
 vim.opt.breakindent = true
